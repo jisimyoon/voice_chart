@@ -131,6 +131,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .c-med{background:var(--blue-l);color:var(--blue);}
 .c-lab{background:var(--green-l);color:var(--green-d);}
 .c-etc{background:var(--gray-l);color:var(--gray-d);}
+.c-ord{background:var(--cor-l);color:var(--cor-d);}
 .lpat{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;}
 .log-txt{font-size:13px;color:var(--tx);line-height:1.5;}
 .log-orig{font-size:11px;color:var(--tx3);margin-top:1px;}
@@ -344,20 +345,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="m-title" id="zMTitle">구역 환자 목록</div>
     <div class="m-sub" id="zMSub"></div>
     <div class="zp-list" id="zPList"></div>
-    <div class="divider"></div>
-    <div class="new-form-lbl">새 환자 등록 (Zone 업데이트)</div>
-    <label>이름</label><input type="text" id="zn" placeholder="예: 정○○" />
-    <label>나이/성별</label><input type="text" id="za" placeholder="예: 58세/남" />
-    <label>주증상</label><input type="text" id="zc" placeholder="예: 흉통" />
-    <label>중증도</label>
-    <select id="zs">
-      <option value="red">적색 — 즉시처치</option>
-      <option value="orange" selected>황색 — 긴급</option>
-      <option value="green">녹색 — 비긴급</option>
-    </select>
-    <div class="mbtns">
+    <div class="mbtns" style="margin-top:14px;">
       <button class="mcnl" onclick="closeZModal()">닫기</button>
-      <button class="mok" onclick="addZonePat()">Zone에 추가</button>
     </div>
   </div>
 </div>
@@ -365,8 +354,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <script>
 const ZONES=['중앙','1구역','2구역','3구역'];
 const shiftMeta={day:{l:'Day',t:'07–15',pc:'p-day'},evening:{l:'Evening',t:'15–23',pc:'p-eve'},night:{l:'Night',t:'23–07',pc:'p-ngt'}};
-const catLabel={vs:'활력징후',med:'투약',lab:'검사',etc:'기타'};
-const catCls={vs:'c-vs',med:'c-med',lab:'c-lab',etc:'c-etc'};
+const catLabel={vs:'활력징후',med:'투약',lab:'검사',order:'의사오더',etc:'기타'};
+const catCls={vs:'c-vs',med:'c-med',lab:'c-lab',order:'c-ord',etc:'c-etc'};
 const sevColors={red:'#E24B4A',orange:'#EF9F27',green:'#639922'};
 const patBg=['#EEEDFE','#E1F5EE','#FAEEDA','#FAECE7'];
 const patFg=['#3C3489','#0F6E56','#854F0B','#993C1D'];
@@ -466,17 +455,14 @@ function openZoneModal(zone){
   } else {
     pats.forEach(p=>{
       const isAdded=myPatients.some(mp=>mp.name===p.name);
-      const sevCls=p.sev==='red'?'sev-r':p.sev==='orange'?'sev-o':'sev-g';
-      const sevTxt=p.sev==='red'?'적색':p.sev==='orange'?'황색':'녹색';
       const item=document.createElement('div'); item.className='zp-item';
       item.innerHTML=`
         <div class="zp-info">
           <div class="zp-name">
             ${p.name}
-            <span class="sev-tag ${sevCls}">${sevTxt}</span>
             ${p.isNew?'<span class="new-badge">NEW</span>':''}
           </div>
-          <div class="zp-detail">${[p.age,p.chief?'· '+p.chief:''].filter(Boolean).join(' ')}</div>
+          <div class="zp-detail">${p.age||''}</div>
         </div>
         <button class="add-me-btn${isAdded?' added':''}" onclick="addToMine('${p.name}','${zone}')" ${isAdded?'disabled':''}>
           ${isAdded?'추가됨':'+ 내 담당'}
@@ -491,8 +477,6 @@ function openZoneModal(zone){
 
 function closeZModal(){
   document.getElementById('zModal').classList.remove('open');
-  ['zn','za','zc'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('zs').value='orange';
   activeZone=null;
 }
 document.getElementById('zModal').addEventListener('click',function(e){if(e.target===this)closeZModal();});
@@ -564,32 +548,59 @@ async function processUtterance(text){
   if(!text||text.length<2) return;
   const ts=nowStr();
   const patNames=myPatients.map(p=>p.name);
+
+  // 발화가 환자 이름으로 시작하는지 확인 (최우선 규칙)
+  const startsWithPat=patNames.find(name=>{
+    const n=name.replace(/○/g,'').replace(/\s/g,'');
+    const t=text.replace(/\s/g,'');
+    return t.startsWith(n)||text.startsWith(name);
+  })||null;
+
   const tempId='t'+Date.now();
-  logs.push({id:tempId,ts,patient:'?',text,summary:text,category:'etc',confidence:'low',proc:true});
+  logs.push({id:tempId,ts,patient:startsWithPat||'?',text,summary:text,category:'etc',confidence:'low',proc:true});
   renderLogs();
+
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',max_tokens:200,
         system:`응급실 간호 음성 기록 분류 AI. JSON만 출력.
-카테고리: vs(활력징후), med(투약), lab(검사), etc(기타)
-내 담당 환자: [${patNames.join(', ')||'없음'}]
-규칙: 1)이름 언급시 해당 환자 2)없으면 문맥 추측 3)불가시 "미확인"
-형식: {"category":"vs","patient":"이름","summary":"15자이내","confidence":"high|medium|low"}`,
-        messages:[{role:'user',content:`발화: "${text}"\n환자: ${patNames.join(', ')||'없음'}`}]
+카테고리: vs(활력징후), med(투약), lab(검사), order(의사오더), etc(기타)
+담당 환자: [${patNames.join(', ')||'없음'}]
+
+[최우선] 발화가 환자 이름(님/씨 포함)으로 시작 → record:true, 해당 환자로 무조건 기록
+[기록] 간호사가 수행한 처치/투약/검사/측정 → record:true
+[의사오더] 지시하는 말투("~해줘","~투여해","~찍어봐") → category:order, record:true
+[무시] 환자/보호자 일상대화, 잡담, 간호행위 무관 발화 → record:false
+
+형식: {"record":true,"category":"vs","patient":"이름","summary":"15자이내","confidence":"high|medium|low"}
+무시시: {"record":false}`,
+        messages:[{role:'user',content:`발화: "${text}"
+담당환자: ${patNames.join(', ')||'없음'}${startsWithPat?'\n[환자이름으로시작-무조건기록:'+ startsWithPat+']':''}`}]
       })
     });
     const data=await res.json();
     const raw=(data.content?.map(c=>c.text||'').join('')||'').trim();
-    let cat='etc',pat='미확인',summary=text,conf='low';
-    try{const j=JSON.parse(raw.replace(/```json|```/g,'').trim());cat=j.category||'etc';pat=j.patient||'미확인';summary=j.summary||text;conf=j.confidence||'low';}catch(e){}
-    if(pat!=='미확인'&&!patNames.includes(pat)) pat='미확인';
-    const idx=logs.findIndex(l=>l.id===tempId);
-    if(idx>-1) logs[idx]={id:tempId,ts,patient:pat,text:summary,originalText:text,category:cat,confidence:conf,proc:false};
+    let record=true,cat='etc',pat=startsWithPat||'미확인',summary=text,conf='low';
+    try{
+      const j=JSON.parse(raw.replace(/```json|```/g,'').trim());
+      record=startsWithPat?true:(j.record!==false);
+      cat=j.category||'etc';
+      pat=startsWithPat||(patNames.includes(j.patient)?j.patient:'미확인');
+      summary=j.summary||text;
+      conf=j.confidence||'low';
+    }catch(e){}
+
+    if(!record){
+      logs=logs.filter(l=>l.id!==tempId);
+    } else {
+      const idx=logs.findIndex(l=>l.id===tempId);
+      if(idx>-1) logs[idx]={id:tempId,ts,patient:pat,text:summary,originalText:text,category:cat,confidence:conf,proc:false};
+    }
   }catch(e){
     const idx=logs.findIndex(l=>l.id===tempId);
-    if(idx>-1){logs[idx].proc=false;logs[idx].patient='미확인';}
+    if(idx>-1){logs[idx].proc=false;logs[idx].patient=startsWithPat||'미확인';}
   }
   renderLogs();
 }
