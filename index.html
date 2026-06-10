@@ -111,7 +111,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .my-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
 .sec-lbl{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;}
 .pat-chips{display:flex;gap:5px;flex-wrap:wrap;}
-.pat-chip{padding:5px 10px;border-radius:99px;border:1px solid var(--bd2);font-size:12px;font-weight:600;background:var(--bg);color:var(--tx2);display:flex;align-items:center;gap:4px;}
+.pat-chip{padding:5px 10px;border-radius:99px;border:1px solid var(--bd2);font-size:12px;font-weight:600;background:var(--bg);color:var(--tx2);display:flex;align-items:center;gap:4px;white-space:nowrap;}
 .pat-chip.new-p{border-color:var(--amber);background:var(--amber-l);color:var(--amber-d);}
 .sdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 .no-pat{font-size:12px;color:var(--tx3);}
@@ -162,10 +162,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .zp-info{flex:1;min-width:0;}
 .zp-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .zp-detail{font-size:11px;color:var(--tx2);margin-top:2px;}
-.sev-tag{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;}
-.sev-r{background:var(--red-l);color:var(--red-d);}
-.sev-o{background:var(--amber-l);color:var(--amber-d);}
-.sev-g{background:var(--green-l);color:var(--green-d);}
 .add-me-btn{padding:7px 13px;border-radius:var(--r);border:1px solid var(--blue);background:var(--blue-l);color:var(--blue);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .add-me-btn.added{background:var(--bg2);border-color:var(--bd2);color:var(--tx3);cursor:default;}
 .add-me-btn:active{opacity:.8;}
@@ -346,7 +342,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="m-sub" id="zMSub"></div>
     <div class="zp-list" id="zPList"></div>
     <div class="mbtns" style="margin-top:14px;">
-      <button class="mcnl" onclick="closeZModal()">닫기</button>
+      <button class="mcnl" style="flex:1;" onclick="closeZModal()">닫기</button>
     </div>
   </div>
 </div>
@@ -487,19 +483,7 @@ function addToMine(name,zone){
   if(p){myPatients.push({...p,isNew:true});renderMyPats();openZoneModal(zone);}
 }
 
-function addZonePat(){
-  const name=document.getElementById('zn').value.trim();
-  if(!name){alert('이름을 입력해 주세요.');return;}
-  const age=document.getElementById('za').value.trim();
-  const chief=document.getElementById('zc').value.trim();
-  const sev=document.getElementById('zs').value;
-  const zone=activeZone||myZone;
-  const np={name,age,chief,sev,isNew:true};
-  zonePats[zone].push(np);
-  zoneNew[zone]=true;
-  if(zone===myZone&&!myPatients.some(p=>p.name===name)) myPatients.push({...np});
-  renderMyPats(); renderZoneBtns(); closeZModal();
-}
+
 
 function simulateNewPat(){
   const others=ZONES.filter(z=>z!==myZone);
