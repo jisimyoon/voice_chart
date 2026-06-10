@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="./manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="간호차팅">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#185FA5">
+<title>음성 간호 차팅</title>
+<style>
+:root{
+  --blue:#185FA5;--blue-l:#E6F1FB;--blue-m:#378ADD;--blue-d:#0C447C;
+  --red:#E24B4A;--red-l:#FCEBEB;--red-d:#A32D2D;
+  --amber:#EF9F27;--amber-l:#FAEEDA;--amber-d:#854F0B;
+  --green:#639922;--green-l:#EAF3DE;--green-d:#3B6D11;
+  --pur-l:#EEEDFE;--pur-d:#3C3489;
+  --teal-l:#E1F5EE;--teal-d:#0F6E56;
+  --cor-l:#FAECE7;--cor-d:#993C1D;
+  --gray-l:#F1EFE8;--gray-d:#5F5E5A;
+  --bg:#fff;--bg2:#f7f7f5;--bg3:#f0efe9;
+  --tx:#1a1a18;--tx2:#6b6a66;--tx3:#9e9d99;
+  --bd:rgba(0,0,0,0.1);--bd2:rgba(0,0,0,0.18);
+  --r:8px;--rl:14px;
+  --st:env(safe-area-inset-top,0px);
+  --sb:env(safe-area-inset-bottom,0px);
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1c1c1a;--bg2:#252523;--bg3:#2e2e2b;
+    --tx:#f0efe8;--tx2:#a0a09a;--tx3:#6a6a64;
+    --bd:rgba(255,255,255,0.1);--bd2:rgba(255,255,255,0.18);
+    --blue-l:#0c2a4a;--blue:#4d9de0;--blue-d:#85b7eb;
+    --red-l:#3a1010;--red:#f07070;--red-d:#f7c1c1;
+    --amber-l:#3a2200;--amber:#f0b050;--amber-d:#f5c87a;
+    --green-l:#1a2e08;--green:#80c040;--green-d:#b0e070;
+    --pur-l:#1e1a40;--pur-d:#a090f0;
+    --teal-l:#0a2018;--teal-d:#50d0a0;
+    --cor-l:#2e1008;--cor-d:#f08060;
+    --gray-l:#2a2a28;--gray-d:#c0beb8;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;}
+
+.screen{display:none;height:100%;flex-direction:column;}
+.screen.on{display:flex;}
+
+/* SETUP */
+.setup-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--st)+20px) 16px calc(24px + var(--sb));}
+.hd-row{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
+.hd-ic{width:46px;height:46px;border-radius:var(--rl);background:var(--blue-l);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.hd-ic svg{width:24px;height:24px;stroke:var(--blue);fill:none;stroke-width:1.8;}
+.s-ttl{font-size:18px;font-weight:700;}
+.s-sub{font-size:12px;color:var(--tx2);margin-top:2px;}
+.fl{font-size:12px;color:var(--tx2);font-weight:500;margin-bottom:6px;margin-top:16px;}
+.fi{width:100%;padding:13px 14px;border:1px solid var(--bd2);border-radius:var(--r);font-size:16px;background:var(--bg);color:var(--tx);outline:none;}
+.fi:focus{border-color:var(--blue);}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;}
+.sb{padding:12px 6px;border:1px solid var(--bd2);border-radius:var(--r);background:var(--bg);text-align:center;cursor:pointer;color:var(--tx2);line-height:1.5;user-select:none;}
+.sb svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;display:block;margin:0 auto 5px;}
+.sb .sl{font-size:13px;font-weight:700;}
+.sb .ss{font-size:11px;}
+.sb.sel{border:2px solid var(--blue);background:var(--blue-l);color:var(--blue);}
+.go-btn{width:100%;margin-top:24px;padding:16px;border-radius:var(--rl);background:var(--blue);color:#fff;border:none;font-size:16px;font-weight:700;cursor:pointer;padding-bottom:calc(16px + var(--sb));}
+.go-btn:active{opacity:.85;}
+
+/* TOPBAR */
+.topbar{padding:calc(var(--st)+10px) 14px 10px;border-bottom:1px solid var(--bd);background:var(--bg);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.nname{font-size:14px;font-weight:700;}
+.pill{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;white-space:nowrap;}
+.p-day{background:var(--amber-l);color:var(--amber-d);}
+.p-eve{background:var(--pur-l);color:var(--pur-d);}
+.p-ngt{background:var(--blue-l);color:var(--blue-d);}
+.p-zone{background:var(--bg2);color:var(--tx2);}
+.clk{font-size:12px;font-weight:700;color:var(--tx2);margin-left:auto;font-variant-numeric:tabular-nums;}
+
+/* LISTEN BAR */
+.listen-bar{padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd);background:var(--bg);}
+.ldot{width:9px;height:9px;border-radius:50%;background:var(--gray-d);flex-shrink:0;}
+.ldot.active{background:var(--red);animation:blink 1.2s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+.ltxt{font-size:12px;color:var(--tx2);flex:1;}
+.llast{font-size:11px;color:var(--tx);max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mic-toggle{padding:7px 13px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg);font-size:12px;font-weight:700;cursor:pointer;color:var(--tx);display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;}
+.mic-toggle svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;}
+.mic-toggle.rec{background:var(--red-l);border-color:var(--red);color:var(--red-d);}
+.mic-toggle:active{opacity:.8;}
+
+/* ZONE BAR */
+.zone-bar{padding:10px 14px;border-bottom:1px solid var(--bd);background:var(--bg);}
+.zone-lbl{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+.zone-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+.zone-btn{padding:10px 12px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg);font-size:12px;font-weight:600;cursor:pointer;color:var(--tx2);display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.zone-btn.my-zone{border:2px solid var(--blue);background:var(--blue-l);color:var(--blue);}
+.zone-btn:active{opacity:.8;}
+.z-left{display:flex;align-items:center;gap:6px;}
+.z-left svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;}
+.z-right{display:flex;align-items:center;gap:5px;}
+.z-cnt{font-size:11px;color:var(--tx3);}
+.zone-btn.my-zone .z-cnt{color:var(--blue);opacity:.7;}
+.new-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:99px;background:var(--red);color:#fff;animation:pop .3s ease;}
+@keyframes pop{0%{transform:scale(0);}70%{transform:scale(1.2);}100%{transform:scale(1);}}
+
+/* MY PATIENTS */
+.my-pat-bar{padding:9px 14px;border-bottom:1px solid var(--bd);background:var(--bg);}
+.my-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.sec-lbl{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;}
+.pat-chips{display:flex;gap:5px;flex-wrap:wrap;}
+.pat-chip{padding:5px 10px;border-radius:99px;border:1px solid var(--bd2);font-size:12px;font-weight:600;background:var(--bg);color:var(--tx2);display:flex;align-items:center;gap:4px;}
+.pat-chip.new-p{border-color:var(--amber);background:var(--amber-l);color:var(--amber-d);}
+.sdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.no-pat{font-size:12px;color:var(--tx3);}
+
+/* LOG */
+.log-hd{padding:6px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--bg);}
+.log-lbl{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;}
+.log-cnt{font-size:11px;color:var(--tx3);}
+.log-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px;display:flex;flex-direction:column;gap:5px;background:var(--bg2);}
+.log-item{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:8px 11px;display:flex;gap:8px;align-items:flex-start;}
+.log-item.proc{opacity:.55;}
+.log-ts{font-size:10px;font-weight:700;color:var(--tx3);white-space:nowrap;padding-top:2px;min-width:56px;}
+.log-body{flex:1;min-width:0;}
+.log-top{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px;}
+.lcat{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;}
+.c-vs{background:var(--pur-l);color:var(--pur-d);}
+.c-med{background:var(--blue-l);color:var(--blue);}
+.c-lab{background:var(--green-l);color:var(--green-d);}
+.c-etc{background:var(--gray-l);color:var(--gray-d);}
+.lpat{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;}
+.log-txt{font-size:13px;color:var(--tx);line-height:1.5;}
+.log-orig{font-size:11px;color:var(--tx3);margin-top:1px;}
+.empty-log{text-align:center;padding:32px 16px;font-size:13px;color:var(--tx3);line-height:1.9;}
+
+/* BOTTOM */
+.bot-bar{padding:10px 14px;padding-bottom:calc(10px + var(--sb));border-top:1px solid var(--bd);background:var(--bg);}
+.end-btn{width:100%;padding:14px;border-radius:var(--rl);background:var(--red);color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.end-btn svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;}
+.end-btn:active{opacity:.85;}
+
+/* INSTALL BANNER */
+.inst-banner{display:none;margin:8px 14px 0;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:var(--r);padding:9px 12px;align-items:center;gap:8px;}
+.inst-banner.vis{display:flex;}
+.inst-banner p{flex:1;font-size:12px;color:var(--blue-d);font-weight:500;}
+.inst-banner button{padding:7px 12px;border-radius:var(--r);background:var(--blue);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;}
+.inst-x{font-size:17px;color:var(--tx3);cursor:pointer;}
+
+/* ZONE MODAL */
+.modal-wrap{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center;z-index:100;}
+.modal-wrap.open{display:flex;}
+.modal{background:var(--bg);border-radius:var(--rl) var(--rl) 0 0;padding:16px 16px calc(20px + var(--sb));width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;}
+.mhandle{width:36px;height:4px;border-radius:2px;background:var(--bd2);margin:0 auto 14px;flex-shrink:0;}
+.m-title{font-size:15px;font-weight:700;margin-bottom:3px;flex-shrink:0;}
+.m-sub{font-size:12px;color:var(--tx2);margin-bottom:12px;flex-shrink:0;}
+.zp-list{overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:6px;flex:1;}
+.zp-item{background:var(--bg2);border-radius:var(--r);padding:10px 12px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.zp-info{flex:1;min-width:0;}
+.zp-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.zp-detail{font-size:11px;color:var(--tx2);margin-top:2px;}
+.sev-tag{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;}
+.sev-r{background:var(--red-l);color:var(--red-d);}
+.sev-o{background:var(--amber-l);color:var(--amber-d);}
+.sev-g{background:var(--green-l);color:var(--green-d);}
+.add-me-btn{padding:7px 13px;border-radius:var(--r);border:1px solid var(--blue);background:var(--blue-l);color:var(--blue);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.add-me-btn.added{background:var(--bg2);border-color:var(--bd2);color:var(--tx3);cursor:default;}
+.add-me-btn:active{opacity:.8;}
+.divider{border:none;border-top:1px solid var(--bd);margin:14px 0;flex-shrink:0;}
+.new-form-lbl{font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:10px;flex-shrink:0;}
+.modal label{font-size:12px;color:var(--tx2);display:block;margin-top:10px;margin-bottom:4px;}
+.modal input,.modal select{width:100%;padding:12px 13px;border:1px solid var(--bd2);border-radius:var(--r);font-size:16px;background:var(--bg);color:var(--tx);outline:none;}
+.modal input:focus,.modal select:focus{border-color:var(--blue);}
+.mbtns{display:flex;gap:8px;margin-top:14px;flex-shrink:0;}
+.mcnl{flex:1;padding:12px;border-radius:var(--r);border:1px solid var(--bd2);background:transparent;font-size:14px;cursor:pointer;color:var(--tx);}
+.mok{flex:2;padding:12px;border-radius:var(--r);background:var(--blue);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;}
+.mok:active{opacity:.85;}
+
+/* REPORT */
+.rep-topbar{padding:calc(var(--st)+10px) 14px 10px;border-bottom:1px solid var(--bd);background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.rep-ttl{font-size:14px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.copy-btn{padding:8px 14px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg);font-size:13px;font-weight:600;cursor:pointer;color:var(--tx);display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;}
+.copy-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;}
+.copy-btn:active{background:var(--bg2);}
+.rep-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg2);}
+.ai-sum{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:12px 14px;}
+.ai-lbl{font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.ai-txt{font-size:13px;line-height:1.65;color:var(--tx);}
+.rep-card{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;}
+.rep-ph{padding:10px 14px;font-size:13px;font-weight:700;}
+.rep-sec{padding:8px 14px;border-top:1px solid var(--bd);}
+.rep-sl{font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+.rep-row{display:flex;gap:8px;padding:3px 0;font-size:12px;}
+.rep-time{color:var(--tx3);white-space:nowrap;min-width:62px;font-weight:700;}
+.rep-txt{color:var(--tx);line-height:1.5;}
+.rep-none{font-size:12px;color:var(--tx3);font-style:italic;}
+.back-btn{margin:10px 14px calc(10px + var(--sb));padding:13px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg);font-size:14px;font-weight:600;cursor:pointer;color:var(--tx);display:flex;align-items:center;justify-content:center;gap:7px;}
+.back-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;}
+.back-btn:active{background:var(--bg2);}
+
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--blue-l);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div class="screen on" id="setupScreen">
+  <div class="setup-scroll">
+    <div class="hd-row">
+      <div class="hd-ic">
+        <svg viewBox="0 0 24 24"><path d="M3 10a9 9 0 0 0 18 0M12 2a4 4 0 0 0-4 4v4a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4zM12 19v3m-4 0h8"/></svg>
+      </div>
+      <div><div class="s-ttl">음성 간호 차팅</div><div class="s-sub">켜두면 AI가 알아서 듣고 자동 분류합니다</div></div>
+    </div>
+
+    <div class="fl">간호사 이름</div>
+    <input class="fi" type="text" id="sName" placeholder="예: 김간호" autocomplete="name" />
+
+    <div class="fl">근무 구분</div>
+    <div class="g3">
+      <div class="sb" data-shift="day" onclick="selS(this)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <div class="sl">Day</div><div class="ss">07–15</div>
+      </div>
+      <div class="sb" data-shift="evening" onclick="selS(this)">
+        <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9"/><path d="M19 3v4m2-2h-4"/></svg>
+        <div class="sl">Evening</div><div class="ss">15–23</div>
+      </div>
+      <div class="sb" data-shift="night" onclick="selS(this)">
+        <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9"/></svg>
+        <div class="sl">Night</div><div class="ss">23–07</div>
+      </div>
+    </div>
+
+    <div class="fl">담당 Zone</div>
+    <div class="g2">
+      <div class="sb" data-zone="중앙" onclick="selZ(this)">
+        <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M12 7v.01"/></svg>
+        <div class="sl">중앙구역</div>
+      </div>
+      <div class="sb" data-zone="1구역" onclick="selZ(this)">
+        <svg viewBox="0 0 24 24"><path d="M12 20V8m-4 4 4-4 4 4"/></svg>
+        <div class="sl">1구역</div>
+      </div>
+      <div class="sb" data-zone="2구역" onclick="selZ(this)">
+        <svg viewBox="0 0 24 24"><path d="M8 8a4 4 0 0 1 8 0c0 5-8 8-8 8h8"/></svg>
+        <div class="sl">2구역</div>
+      </div>
+      <div class="sb" data-zone="3구역" onclick="selZ(this)">
+        <svg viewBox="0 0 24 24"><path d="M8 8.5A2.5 2.5 0 0 1 13 10a2.5 2.5 0 0 1-2.5 2.5H8m2.5 0H9A2.5 2.5 0 0 1 11.5 15 2.5 2.5 0 0 1 9 17.5"/></svg>
+        <div class="sl">3구역</div>
+      </div>
+    </div>
+
+    <div class="fl">날짜</div>
+    <input class="fi" type="date" id="sDate" />
+
+    <button class="go-btn" onclick="startDuty()">듀티 시작</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="screen" id="mainScreen">
+
+  <div class="topbar">
+    <svg width="16" height="16" viewBox="0 0 24 24" style="stroke:var(--blue);fill:none;stroke-width:1.8;flex-shrink:0;"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a7 7 0 0 1 13 0"/></svg>
+    <span class="nname" id="dName"></span>
+    <span class="pill" id="dShift"></span>
+    <span class="pill p-zone" id="dZone"></span>
+    <span class="clk" id="clk">--:--:--</span>
+  </div>
+
+  <div class="inst-banner" id="instBanner">
+    <p>홈 화면에 추가하면 앱처럼 쓸 수 있어요!</p>
+    <button onclick="installPWA()">설치</button>
+    <span class="inst-x" onclick="document.getElementById('instBanner').classList.remove('vis')">✕</span>
+  </div>
+
+  <div class="listen-bar">
+    <span class="ldot" id="ldot"></span>
+    <span class="ltxt" id="ltxt">대기 중</span>
+    <span class="llast" id="llast"></span>
+    <button class="mic-toggle" id="micToggle" onclick="toggleListen()">
+      <svg id="micSvg" viewBox="0 0 24 24"><path d="M3 10a9 9 0 0 0 18 0M12 2a4 4 0 0 0-4 4v4a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4zM12 19v3m-4 0h8"/></svg>
+      <span id="micLbl">청취 시작</span>
+    </button>
+  </div>
+
+  <div class="zone-bar">
+    <div class="zone-lbl">구역 현황 — 탭하면 환자 목록 확인 및 추가</div>
+    <div class="zone-grid" id="zoneBtns"></div>
+  </div>
+
+  <div class="my-pat-bar">
+    <div class="my-hd">
+      <span class="sec-lbl">내 담당 환자 <span id="myPatCnt" style="color:var(--tx2);font-weight:400;">0명</span></span>
+    </div>
+    <div class="pat-chips" id="myPatChips">
+      <span class="no-pat">구역 버튼을 눌러 환자를 추가하세요</span>
+    </div>
+  </div>
+
+  <div class="log-hd">
+    <span class="log-lbl">기록</span>
+    <span class="log-cnt" id="logCnt">0건</span>
+  </div>
+
+  <div class="log-area" id="logArea">
+    <div class="empty-log">청취 시작 버튼을 누르면<br>말하는 내용이 AI가 환자별로<br>자동 분류하여 기록합니다</div>
+  </div>
+
+  <div class="bot-bar">
+    <button class="end-btn" onclick="endDuty()">
+      <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"/></svg>
+      듀티 종료 — 차팅 생성
+    </button>
+  </div>
+
+</div>
+
+<!-- REPORT -->
+<div class="screen" id="reportScreen">
+  <div class="rep-topbar">
+    <span class="rep-ttl" id="repTtl">차팅</span>
+    <button class="copy-btn" onclick="copyRep()">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      복사
+    </button>
+  </div>
+  <div class="rep-body" id="repBody"></div>
+  <button class="back-btn" onclick="goBack()">
+    <svg viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+    돌아가기
+  </button>
+</div>
+
+<!-- ZONE MODAL -->
+<div class="modal-wrap" id="zModal">
+  <div class="modal">
+    <div class="mhandle"></div>
+    <div class="m-title" id="zMTitle">구역 환자 목록</div>
+    <div class="m-sub" id="zMSub"></div>
+    <div class="zp-list" id="zPList"></div>
+    <div class="divider"></div>
+    <div class="new-form-lbl">새 환자 등록 (Zone 업데이트)</div>
+    <label>이름</label><input type="text" id="zn" placeholder="예: 정○○" />
+    <label>나이/성별</label><input type="text" id="za" placeholder="예: 58세/남" />
+    <label>주증상</label><input type="text" id="zc" placeholder="예: 흉통" />
+    <label>중증도</label>
+    <select id="zs">
+      <option value="red">적색 — 즉시처치</option>
+      <option value="orange" selected>황색 — 긴급</option>
+      <option value="green">녹색 — 비긴급</option>
+    </select>
+    <div class="mbtns">
+      <button class="mcnl" onclick="closeZModal()">닫기</button>
+      <button class="mok" onclick="addZonePat()">Zone에 추가</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ZONES=['중앙','1구역','2구역','3구역'];
+const shiftMeta={day:{l:'Day',t:'07–15',pc:'p-day'},evening:{l:'Evening',t:'15–23',pc:'p-eve'},night:{l:'Night',t:'23–07',pc:'p-ngt'}};
+const catLabel={vs:'활력징후',med:'투약',lab:'검사',etc:'기타'};
+const catCls={vs:'c-vs',med:'c-med',lab:'c-lab',etc:'c-etc'};
+const sevColors={red:'#E24B4A',orange:'#EF9F27',green:'#639922'};
+const patBg=['#EEEDFE','#E1F5EE','#FAEEDA','#FAECE7'];
+const patFg=['#3C3489','#0F6E56','#854F0B','#993C1D'];
+
+let shift='',myZone='',nurseName='',nurseDate='';
+let myPatients=[], logs=[];
+let recognition=null, isListening=false;
+let activeZone=null;
+
+const zonePats={
+  '중앙':[{name:'김○○',age:'67세/남',chief:'흉통',sev:'red',isNew:false},{name:'이○○',age:'34세/여',chief:'복통',sev:'orange',isNew:false}],
+  '1구역':[{name:'박○○',age:'82세/남',chief:'의식저하',sev:'red',isNew:false},{name:'최○○',age:'45세/남',chief:'열상',sev:'green',isNew:false}],
+  '2구역':[],
+  '3구역':[],
+};
+const zoneNew={'중앙':false,'1구역':false,'2구역':false,'3구역':false};
+
+(()=>{const t=new Date();document.getElementById('sDate').value=t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate());})();
+
+function selS(el){document.querySelectorAll('[data-shift]').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');shift=el.dataset.shift;}
+function selZ(el){document.querySelectorAll('[data-zone]').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');myZone=el.dataset.zone;}
+
+function startDuty(){
+  const name=document.getElementById('sName').value.trim();
+  if(!name){alert('이름을 입력해 주세요.');return;}
+  if(!shift){alert('근무 구분을 선택해 주세요.');return;}
+  if(!myZone){alert('담당 Zone을 선택해 주세요.');return;}
+  nurseName=name; nurseDate=document.getElementById('sDate').value;
+  myPatients=zonePats[myZone].map(p=>({...p,isNew:false}));
+  const sm=shiftMeta[shift];
+  document.getElementById('dName').textContent=nurseName;
+  const ds=document.getElementById('dShift');
+  ds.textContent=sm.l+' '+sm.t; ds.className='pill '+sm.pc;
+  document.getElementById('dZone').textContent=myZone;
+  show('mainScreen');
+  startClock(); renderZoneBtns(); renderMyPats(); initSpeech();
+  setTimeout(simulateNewPat, 25000);
+}
+
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));document.getElementById(id).classList.add('on');}
+
+function startClock(){
+  function tick(){document.getElementById('clk').textContent=nowStr();}
+  tick(); setInterval(tick,1000);
+}
+function nowStr(){const n=new Date();return p2(n.getHours())+':'+p2(n.getMinutes())+':'+p2(n.getSeconds());}
+function p2(n){return String(n).padStart(2,'0');}
+
+function renderZoneBtns(){
+  const el=document.getElementById('zoneBtns'); el.innerHTML='';
+  const zoneIconPath={
+    '중앙':'M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4',
+    '1구역':'M12 20V8m-4 4 4-4 4 4',
+    '2구역':'M8 8a4 4 0 0 1 8 0c0 5-8 8-8 8h8',
+    '3구역':'M8 8.5A2.5 2.5 0 0 1 13 10a2.5 2.5 0 0 1-2.5 2.5H8m2.5 0H9A2.5 2.5 0 0 1 11.5 15 2.5 2.5 0 0 1 9 17.5',
+  };
+  ZONES.forEach(z=>{
+    const isMyZone=z===myZone;
+    const btn=document.createElement('button');
+    btn.className='zone-btn'+(isMyZone?' my-zone':'');
+    btn.onclick=()=>openZoneModal(z);
+    btn.innerHTML=`
+      <div class="z-left">
+        <svg width="16" height="16" viewBox="0 0 24 24" style="stroke:currentColor;fill:none;stroke-width:1.8;flex-shrink:0;"><path d="${zoneIconPath[z]}"/></svg>
+        <span>${z}${isMyZone?' <span style="font-size:10px;opacity:.7;">(내 구역)</span>':''}</span>
+      </div>
+      <div class="z-right">
+        <span class="z-cnt">${zonePats[z].length}명</span>
+        ${zoneNew[z]?'<span class="new-badge">NEW</span>':''}
+      </div>
+    `;
+    el.appendChild(btn);
+  });
+}
+
+function renderMyPats(){
+  const el=document.getElementById('myPatChips');
+  document.getElementById('myPatCnt').textContent=myPatients.length+'명';
+  if(!myPatients.length){el.innerHTML='<span class="no-pat">구역 버튼을 눌러 환자를 추가하세요</span>';return;}
+  el.innerHTML='';
+  myPatients.forEach(p=>{
+    const chip=document.createElement('div');
+    chip.className='pat-chip'+(p.isNew?' new-p':'');
+    chip.innerHTML=`<span class="sdot" style="background:${sevColors[p.sev]||'#B4B2A9'};"></span>${p.name}${p.isNew?' <span style="font-size:10px;">NEW</span>':''}`;
+    el.appendChild(chip);
+  });
+}
+
+function openZoneModal(zone){
+  activeZone=zone;
+  const pats=zonePats[zone];
+  document.getElementById('zMTitle').textContent=zone+' 환자 목록';
+  document.getElementById('zMSub').textContent=`총 ${pats.length}명 — "+ 내 담당" 버튼으로 추가하세요`;
+  const list=document.getElementById('zPList'); list.innerHTML='';
+  if(!pats.length){
+    list.innerHTML='<div style="font-size:13px;color:var(--tx3);padding:10px 0;">등록된 환자가 없습니다.</div>';
+  } else {
+    pats.forEach(p=>{
+      const isAdded=myPatients.some(mp=>mp.name===p.name);
+      const sevCls=p.sev==='red'?'sev-r':p.sev==='orange'?'sev-o':'sev-g';
+      const sevTxt=p.sev==='red'?'적색':p.sev==='orange'?'황색':'녹색';
+      const item=document.createElement('div'); item.className='zp-item';
+      item.innerHTML=`
+        <div class="zp-info">
+          <div class="zp-name">
+            ${p.name}
+            <span class="sev-tag ${sevCls}">${sevTxt}</span>
+            ${p.isNew?'<span class="new-badge">NEW</span>':''}
+          </div>
+          <div class="zp-detail">${[p.age,p.chief?'· '+p.chief:''].filter(Boolean).join(' ')}</div>
+        </div>
+        <button class="add-me-btn${isAdded?' added':''}" onclick="addToMine('${p.name}','${zone}')" ${isAdded?'disabled':''}>
+          ${isAdded?'추가됨':'+ 내 담당'}
+        </button>
+      `;
+      list.appendChild(item);
+    });
+  }
+  zoneNew[zone]=false; renderZoneBtns();
+  document.getElementById('zModal').classList.add('open');
+}
+
+function closeZModal(){
+  document.getElementById('zModal').classList.remove('open');
+  ['zn','za','zc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('zs').value='orange';
+  activeZone=null;
+}
+document.getElementById('zModal').addEventListener('click',function(e){if(e.target===this)closeZModal();});
+
+function addToMine(name,zone){
+  if(myPatients.some(p=>p.name===name)) return;
+  const p=zonePats[zone].find(p=>p.name===name);
+  if(p){myPatients.push({...p,isNew:true});renderMyPats();openZoneModal(zone);}
+}
+
+function addZonePat(){
+  const name=document.getElementById('zn').value.trim();
+  if(!name){alert('이름을 입력해 주세요.');return;}
+  const age=document.getElementById('za').value.trim();
+  const chief=document.getElementById('zc').value.trim();
+  const sev=document.getElementById('zs').value;
+  const zone=activeZone||myZone;
+  const np={name,age,chief,sev,isNew:true};
+  zonePats[zone].push(np);
+  zoneNew[zone]=true;
+  if(zone===myZone&&!myPatients.some(p=>p.name===name)) myPatients.push({...np});
+  renderMyPats(); renderZoneBtns(); closeZModal();
+}
+
+function simulateNewPat(){
+  const others=ZONES.filter(z=>z!==myZone);
+  const t=others[Math.floor(Math.random()*others.length)];
+  zonePats[t].push({name:'신○○',age:'52세/남',chief:'호흡곤란',sev:'orange',isNew:true});
+  zoneNew[t]=true; renderZoneBtns();
+}
+
+function initSpeech(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){document.getElementById('ltxt').textContent='Chrome 브라우저에서 실행해 주세요';document.getElementById('micToggle').disabled=true;return;}
+  recognition=new SR();
+  recognition.lang='ko-KR'; recognition.continuous=false; recognition.interimResults=true;
+  recognition.onresult=function(e){
+    let interim='',final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
+    }
+    const txt=final||interim;
+    if(txt) document.getElementById('llast').textContent='"'+txt+'"';
+    if(final) processUtterance(final.trim());
+  };
+  recognition.onend=function(){if(isListening){try{recognition.start();}catch(e){}}else setListenUI(false);};
+  recognition.onerror=function(e){if(e.error==='not-allowed'){document.getElementById('ltxt').textContent='마이크 권한이 필요합니다';isListening=false;setListenUI(false);}};
+}
+
+function toggleListen(){
+  if(!recognition) return;
+  if(!isListening){isListening=true;try{recognition.start();}catch(e){}setListenUI(true);}
+  else{isListening=false;try{recognition.stop();}catch(e){}setListenUI(false);}
+}
+
+function setListenUI(on){
+  document.getElementById('ldot').className='ldot'+(on?' active':'');
+  document.getElementById('ltxt').textContent=on?'상시 청취 중 — 말씀하세요':'청취 중단됨';
+  const btn=document.getElementById('micToggle');
+  btn.className='mic-toggle'+(on?' rec':'');
+  document.getElementById('micSvg').innerHTML=on
+    ?'<rect x="6" y="6" width="12" height="12" rx="2"/>'
+    :'<path d="M3 10a9 9 0 0 0 18 0M12 2a4 4 0 0 0-4 4v4a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4zM12 19v3m-4 0h8"/>';
+  document.getElementById('micLbl').textContent=on?'청취 중단':'청취 시작';
+}
+
+async function processUtterance(text){
+  if(!text||text.length<2) return;
+  const ts=nowStr();
+  const patNames=myPatients.map(p=>p.name);
+  const tempId='t'+Date.now();
+  logs.push({id:tempId,ts,patient:'?',text,summary:text,category:'etc',confidence:'low',proc:true});
+  renderLogs();
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:200,
+        system:`응급실 간호 음성 기록 분류 AI. JSON만 출력.
+카테고리: vs(활력징후), med(투약), lab(검사), etc(기타)
+내 담당 환자: [${patNames.join(', ')||'없음'}]
+규칙: 1)이름 언급시 해당 환자 2)없으면 문맥 추측 3)불가시 "미확인"
+형식: {"category":"vs","patient":"이름","summary":"15자이내","confidence":"high|medium|low"}`,
+        messages:[{role:'user',content:`발화: "${text}"\n환자: ${patNames.join(', ')||'없음'}`}]
+      })
+    });
+    const data=await res.json();
+    const raw=(data.content?.map(c=>c.text||'').join('')||'').trim();
+    let cat='etc',pat='미확인',summary=text,conf='low';
+    try{const j=JSON.parse(raw.replace(/```json|```/g,'').trim());cat=j.category||'etc';pat=j.patient||'미확인';summary=j.summary||text;conf=j.confidence||'low';}catch(e){}
+    if(pat!=='미확인'&&!patNames.includes(pat)) pat='미확인';
+    const idx=logs.findIndex(l=>l.id===tempId);
+    if(idx>-1) logs[idx]={id:tempId,ts,patient:pat,text:summary,originalText:text,category:cat,confidence:conf,proc:false};
+  }catch(e){
+    const idx=logs.findIndex(l=>l.id===tempId);
+    if(idx>-1){logs[idx].proc=false;logs[idx].patient='미확인';}
+  }
+  renderLogs();
+}
+
+function renderLogs(){
+  const area=document.getElementById('logArea');
+  const done=logs.filter(l=>!l.proc);
+  document.getElementById('logCnt').textContent=done.length+'건';
+  if(!logs.length){area.innerHTML='<div class="empty-log">청취 시작 버튼을 누르면<br>말하는 내용이 AI가 환자별로<br>자동 분류하여 기록합니다</div>';return;}
+  area.innerHTML='';
+  const confMark={high:'',medium:' ~',low:' ?'};
+  [...logs].reverse().forEach(l=>{
+    const pi=myPatients.findIndex(p=>p.name===l.patient);
+    const bg=pi>=0?patBg[pi%4]:patBg[2];
+    const fg=pi>=0?patFg[pi%4]:patFg[2];
+    const div=document.createElement('div');
+    div.className='log-item'+(l.proc?' proc':'');
+    div.innerHTML=`
+      <span class="log-ts">${l.ts}</span>
+      <div class="log-body">
+        <div class="log-top">
+          <span class="lcat ${catCls[l.category]||'c-etc'}">${l.proc?'<span class="spin"></span>분류중':catLabel[l.category]||'기타'}</span>
+          <span class="lpat" style="background:${bg};color:${fg};">${l.patient}${confMark[l.confidence]||''}</span>
+        </div>
+        <div class="log-txt">${l.text}</div>
+        ${l.originalText&&l.originalText!==l.text?`<div class="log-orig">"${l.originalText}"</div>`:''}
+      </div>
+    `;
+    area.appendChild(div);
+  });
+}
+
+async function endDuty(){
+  if(isListening){isListening=false;try{recognition&&recognition.stop();}catch(e){}setListenUI(false);}
+  const done=logs.filter(l=>!l.proc);
+  if(!done.length){alert('기록된 내용이 없습니다.');return;}
+  show('reportScreen');
+  const sm=shiftMeta[shift];
+  const dateStr=nurseDate||new Date().toISOString().split('T')[0];
+  document.getElementById('repTtl').textContent=`${nurseName} · ${dateStr} · ${sm.l}`;
+  const body=document.getElementById('repBody');
+  body.innerHTML='<div style="text-align:center;padding:32px;font-size:13px;color:var(--tx2);"><span class="spin"></span> 차팅 생성 중...</div>';
+  let aiSum='';
+  try{
+    const logStr=done.map(l=>`[${l.ts}][${l.patient}][${l.category}] ${l.text}`).join('\n');
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,
+        system:'응급실 간호 인수인계 요약 AI. 특이사항·주의 환자·핵심 사항 2~4문장. 한국어로 간결하게.',
+        messages:[{role:'user',content:`간호사: ${nurseName} / ${sm.l} / ${myZone}\n로그:\n${logStr}\n\n인수인계 요약.`}]
+      })
+    });
+    const data=await res.json();
+    aiSum=data.content?.map(c=>c.text||'').join('').trim()||'';
+  }catch(e){}
+  body.innerHTML='';
+  if(aiSum){
+    const box=document.createElement('div');box.className='ai-sum';
+    box.innerHTML=`<div class="ai-lbl">AI 인수인계 요약</div><div class="ai-txt">${aiSum.replace(/\n/g,'<br>')}</div>`;
+    body.appendChild(box);
+  }
+  const unk=done.filter(l=>l.patient==='미확인');
+  if(unk.length){
+    const card=document.createElement('div');card.className='rep-card';
+    card.innerHTML=`<div class="rep-ph" style="background:var(--amber-l);color:var(--amber-d);">미확인 기록 — ${unk.length}건 (검토 필요)</div>`;
+    const sec=document.createElement('div');sec.className='rep-sec';
+    unk.forEach(l=>{const r=document.createElement('div');r.className='rep-row';r.innerHTML=`<span class="rep-time">${l.ts}</span><span class="rep-txt">[${catLabel[l.category]}] ${l.text}</span>`;sec.appendChild(r);});
+    card.appendChild(sec);body.appendChild(card);
+  }
+  myPatients.forEach((p,pi)=>{
+    const pl=done.filter(l=>l.patient===p.name);
+    const card=document.createElement('div');card.className='rep-card';
+    const bg=patBg[pi%4],fg=patFg[pi%4];
+    card.innerHTML=`<div class="rep-ph" style="background:${bg};color:${fg};">${p.name}${p.isNew?' <span style="font-size:10px;opacity:.7;">NEW</span>':''} — ${pl.length}건</div>`;
+    ['vs','med','lab','etc'].forEach(cat=>{
+      const cl=pl.filter(l=>l.category===cat);
+      const sec=document.createElement('div');sec.className='rep-sec';
+      sec.innerHTML=`<div class="rep-sl">${catLabel[cat]}</div>`;
+      if(!cl.length){sec.innerHTML+=`<div class="rep-none">기록 없음</div>`;}
+      else cl.forEach(l=>{
+        const r=document.createElement('div');r.className='rep-row';
+        const conf=l.confidence==='medium'?'<span style="color:var(--tx3);font-size:10px;"> (추측)</span>':l.confidence==='low'?'<span style="color:var(--tx3);font-size:10px;"> (불확실)</span>':'';
+        r.innerHTML=`<span class="rep-time">${l.ts}</span><span class="rep-txt">${l.text}${conf}</span>`;
+        sec.appendChild(r);
+      });
+      card.appendChild(sec);
+    });
+    body.appendChild(card);
+  });
+}
+
+function copyRep(){
+  const sm=shiftMeta[shift];
+  const dateStr=nurseDate||new Date().toISOString().split('T')[0];
+  let txt=`[간호 차팅] ${nurseName} · ${dateStr} · ${sm.l} · ${myZone}\n${'='.repeat(44)}\n\n`;
+  const sumEl=document.querySelector('.ai-txt');
+  if(sumEl) txt+=`[인수인계 요약]\n${sumEl.textContent}\n\n`;
+  const done=logs.filter(l=>!l.proc);
+  const unk=done.filter(l=>l.patient==='미확인');
+  if(unk.length){txt+=`[미확인 기록 — 검토 필요]\n`;unk.forEach(l=>txt+=`  ${l.ts}  [${catLabel[l.category]}] ${l.text}\n`);txt+='\n';}
+  myPatients.forEach(p=>{
+    const pl=done.filter(l=>l.patient===p.name);
+    txt+=`▶ ${p.name} (${pl.length}건)\n`;
+    ['vs','med','lab','etc'].forEach(cat=>{
+      const cl=pl.filter(l=>l.category===cat);
+      if(cl.length){txt+=`  [${catLabel[cat]}]\n`;cl.forEach(l=>txt+=`    ${l.ts}  ${l.text}\n`);}
+    });
+    txt+='\n';
+  });
+  navigator.clipboard.writeText(txt).then(()=>{
+    const b=document.querySelector('.copy-btn');const orig=b.innerHTML;
+    b.innerHTML='<svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2"><path d="M20 6 9 17l-5-5"/></svg> 복사됨';
+    setTimeout(()=>{b.innerHTML=orig;},2000);
+  }).catch(()=>alert('복사 실패. 브라우저 권한을 확인해 주세요.'));
+}
+
+function goBack(){show('mainScreen');}
+
+// PWA
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(e=>console.warn(e)));
+}
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();deferredPrompt=e;
+  document.getElementById('instBanner').classList.add('vis');
+});
+function installPWA(){
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(()=>{deferredPrompt=null;document.getElementById('instBanner').classList.remove('vis');});
+}
+window.addEventListener('appinstalled',()=>document.getElementById('instBanner').classList.remove('vis'));
+</script>
+</body>
+</html>
