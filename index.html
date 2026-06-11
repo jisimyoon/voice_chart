@@ -721,36 +721,6 @@ function setListenUI(on){
 
 
 
-무시시: {"record":false}`,
-        messages:[{role:'user',content:`발화: "${text}"
-담당환자: ${patNames.join(', ')||'없음'}${startsWithPat?'\n[환자이름으로시작-무조건기록:'+ startsWithPat+']':''}`}]
-      })
-    });
-    const data=await res.json();
-    const raw=(data.content?.map(c=>c.text||'').join('')||'').trim();
-    let record=true,cat='etc',pat=startsWithPat||'미확인',summary=text,conf='low';
-    try{
-      const j=JSON.parse(raw.replace(/```json|```/g,'').trim());
-      record=startsWithPat?true:(j.record!==false);
-      cat=j.category||'etc';
-      pat=startsWithPat||(patNames.includes(j.patient)?j.patient:'미확인');
-      summary=j.summary||text;
-      conf=j.confidence||'low';
-    }catch(e){}
-
-    if(!record){
-      logs=logs.filter(l=>l.id!==tempId);
-    } else {
-      const idx=logs.findIndex(l=>l.id===tempId);
-      if(idx>-1) logs[idx]={id:tempId,ts,patient:pat,text:summary,originalText:text,category:cat,confidence:conf,proc:false};
-    }
-  }catch(e){
-    const idx=logs.findIndex(l=>l.id===tempId);
-    if(idx>-1){logs[idx].proc=false;logs[idx].patient=startsWithPat||'미확인';}
-  }
-  renderLogs();
-}
-
 function renderLogs(){
   const area=document.getElementById('logArea');
   const done=logs.filter(l=>!l.proc);
