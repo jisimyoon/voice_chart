@@ -255,6 +255,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fl">날짜</div>
     <input class="fi" type="date" id="sDate" />
 
+    <div class="fl">OpenAI API 키</div>
+    <input class="fi" type="password" id="sApiKey" placeholder="sk-..." autocomplete="off" />
+    <div style="font-size:11px;color:var(--tx3);margin-top:4px;">입력하면 이 기기에 저장됩니다. 한 번만 입력하면 돼요.</div>
+
     <button class="go-btn" onclick="startDuty()">듀티 시작</button>
   </div>
 </div>
@@ -276,6 +280,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <span class="inst-x" onclick="document.getElementById('instBanner').classList.remove('vis')">✕</span>
   </div>
 
+  <div id="apiBanner" style="display:flex;margin:8px 14px 0;background:var(--green-l);border:1px solid var(--green);border-radius:var(--r);padding:9px 12px;font-size:12px;color:var(--green-d);align-items:center;gap:8px;">
+    <span style="flex:1;">GPT-4o Realtime 연결 준비됨</span>
+    <span style="cursor:pointer;text-decoration:underline;white-space:nowrap;" onclick="resetKey()">키 재설정</span>
+  </div>
   <div class="listen-bar">
     <span class="ldot" id="ldot"></span>
     <span class="ltxt" id="ltxt">대기 중</span>
@@ -358,7 +366,7 @@ const patFg=['#3C3489','#0F6E56','#854F0B','#993C1D'];
 
 let shift='',myZone='',nurseName='',nurseDate='';
 let myPatients=[], logs=[];
-let recognition=null, isListening=false;
+let isListening=false;
 let activeZone=null;
 
 const zonePats={
@@ -369,7 +377,12 @@ const zonePats={
 };
 const zoneNew={'중앙':false,'1구역':false,'2구역':false,'3구역':false};
 
-(()=>{const t=new Date();document.getElementById('sDate').value=t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate());})();
+(()=>{
+  const t=new Date();
+  document.getElementById('sDate').value=t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate());
+  const saved=localStorage.getItem('oai_key');
+  if(saved) document.getElementById('sApiKey').placeholder='저장된 키 사용 중 (변경하려면 입력)';
+})();
 
 function selS(el){document.querySelectorAll('[data-shift]').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');shift=el.dataset.shift;}
 function selZ(el){document.querySelectorAll('[data-zone]').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');myZone=el.dataset.zone;}
@@ -379,10 +392,21 @@ function startDuty(){
   if(!name){alert('이름을 입력해 주세요.');return;}
   if(!shift){alert('근무 구분을 선택해 주세요.');return;}
   if(!myZone){alert('담당 Zone을 선택해 주세요.');return;}
+  // API 키 저장
+  const inputKey = document.getElementById('sApiKey').value.trim();
+  if(inputKey && inputKey.startsWith('sk-')){
+    localStorage.setItem('oai_key', inputKey);
+    window._OAI_KEY = inputKey;
+  } else {
+    const stored = localStorage.getItem('oai_key');
+    if(stored) { window._OAI_KEY = stored; }
+    else { alert('OpenAI API 키를 입력해 주세요. (sk-로 시작)'); return; }
+  }
   nurseName=name; nurseDate=document.getElementById('sDate').value;
   myPatients=zonePats[myZone].map(p=>({...p,isNew:false}));
   const sm=shiftMeta[shift];
   document.getElementById('dName').textContent=nurseName;
+  document.getElementById('apiBanner').style.display='flex';
   const ds=document.getElementById('dShift');
   ds.textContent=sm.l+' '+sm.t; ds.className='pill '+sm.pc;
   document.getElementById('dZone').textContent=myZone;
@@ -480,7 +504,37 @@ document.getElementById('zModal').addEventListener('click',function(e){if(e.targ
 function addToMine(name,zone){
   if(myPatients.some(p=>p.name===name)) return;
   const p=zonePats[zone].find(p=>p.name===name);
-  if(p){myPatients.push({...p,isNew:true});renderMyPats();openZoneModal(zone);}
+  if(p){
+    myPatients.push({...p,isNew:true});
+    renderMyPats();
+    openZoneModal(zone);
+    // 새 환자 추가 시 GPT-4o 세션에 환자 목록 업데이트
+    updateRealtimePatients();
+  }
+}
+
+function updateRealtimePatients(){
+  if(!rtDc || rtDc.readyState !== 'open') return;
+  const patNames = myPatients.map(p=>p.name);
+  rtDc.send(JSON.stringify({
+    type: 'session.update',
+    session: {
+      instructions: `당신은 응급실 간호사의 AI 비서입니다.
+들리는 음성을 인식하고, 아래 규칙에 따라 JSON으로만 응답하세요. 다른 텍스트 없이.
+
+담당 환자 목록: [${patNames.join(', ')||'없음'}]
+카테고리: vs(활력징후), med(투약), lab(검사), order(의사오더), etc(기타)
+
+[최우선] 발화가 환자 이름(님/씨 포함)으로 시작 → record:true, 해당 환자로 무조건 기록
+[기록] 간호사 처치/투약/검사/측정 발화 → record:true
+[의사오더] 지시 말투("~해줘","~투여해","~찍어봐") → category:order, record:true
+[무시] 환자/보호자 일상대화, 잡담, 간호행위 무관 발화 → record:false
+[약물명] 의료 문맥으로 올바르게 해석 (예: "에픽"→에피네프린, "덱사"→덱사메타손)
+
+응답 형식 (기록시): {"record":true,"category":"med","patient":"환자이름","summary":"내용15자이내","confidence":"high|medium|low"}
+응답 형식 (무시시): {"record":false}`,
+    }
+  }));
 }
 
 
@@ -492,29 +546,166 @@ function simulateNewPat(){
   zoneNew[t]=true; renderZoneBtns();
 }
 
-function initSpeech(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){document.getElementById('ltxt').textContent='Chrome 브라우저에서 실행해 주세요';document.getElementById('micToggle').disabled=true;return;}
-  recognition=new SR();
-  recognition.lang='ko-KR'; recognition.continuous=false; recognition.interimResults=true;
-  recognition.onresult=function(e){
-    let interim='',final='';
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
-      else interim+=e.results[i][0].transcript;
-    }
-    const txt=final||interim;
-    if(txt) document.getElementById('llast').textContent='"'+txt+'"';
-    if(final) processUtterance(final.trim());
-  };
-  recognition.onend=function(){if(isListening){try{recognition.start();}catch(e){}}else setListenUI(false);};
-  recognition.onerror=function(e){if(e.error==='not-allowed'){document.getElementById('ltxt').textContent='마이크 권한이 필요합니다';isListening=false;setListenUI(false);}};
+// ── OpenAI Realtime API 음성 인식 ──
+let rtSession=null, rtPc=null, rtDc=null;
+let audioStream=null;
+
+async function initSpeech(){
+  // API 키는 startDuty에서 이미 처리됨
+  if(!window._OAI_KEY){
+    document.getElementById('ltxt').textContent='API 키 오류 — 다시 시작해 주세요';
+    document.getElementById('micToggle').disabled=true;
+  }
 }
 
-function toggleListen(){
-  if(!recognition) return;
-  if(!isListening){isListening=true;try{recognition.start();}catch(e){}setListenUI(true);}
-  else{isListening=false;try{recognition.stop();}catch(e){}setListenUI(false);}
+async function toggleListen(){
+  if(!isListening){ await startRealtime(); }
+  else { stopRealtime(); }
+}
+
+async function startRealtime(){
+  try{
+    document.getElementById('ltxt').textContent='연결 중...';
+
+    // 마이크 스트림 확보
+    audioStream = await navigator.mediaDevices.getUserMedia({audio:true});
+
+    // OpenAI Realtime API — WebRTC 방식
+    rtPc = new RTCPeerConnection();
+
+    // 오디오 트랙 추가
+    audioStream.getTracks().forEach(t => rtPc.addTrack(t, audioStream));
+
+    // 데이터 채널 (이벤트 수신)
+    rtDc = rtPc.createDataChannel('oai-events');
+    rtDc.onmessage = handleRealtimeEvent;
+
+    // SDP offer 생성
+    const offer = await rtPc.createOffer();
+    await rtPc.setLocalDescription(offer);
+
+    // OpenAI Realtime API 연결
+    const res = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + window._OAI_KEY,
+        'Content-Type': 'application/sdp',
+      },
+      body: offer.sdp,
+    });
+
+    if(!res.ok){
+      const err = await res.text();
+      throw new Error('API 오류: ' + res.status + ' ' + err);
+    }
+
+    const answerSdp = await res.text();
+    await rtPc.setRemoteDescription({type:'answer', sdp:answerSdp});
+
+    // 세션 설정 — GPT-4o가 음성인식 + 분류 동시 처리
+    rtDc.onopen = () => {
+      const patNames = myPatients.map(p=>p.name);
+      rtDc.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          modalities: ['text'],
+          input_audio_transcription: { model: 'whisper-1' },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 700,
+          },
+          instructions: `당신은 응급실 간호사의 AI 비서입니다.
+들리는 음성을 인식하고, 아래 규칙에 따라 JSON으로만 응답하세요. 다른 텍스트 없이.
+
+담당 환자 목록: [${patNames.join(', ')||'없음'}]
+카테고리: vs(활력징후), med(투약), lab(검사), order(의사오더), etc(기타)
+
+[최우선] 발화가 환자 이름(님/씨 포함)으로 시작 → record:true, 해당 환자로 무조건 기록
+[기록] 간호사 처치/투약/검사/측정 발화 → record:true
+[의사오더] 지시 말투("~해줘","~투여해","~찍어봐") → category:order, record:true
+[무시] 환자/보호자 일상대화, 잡담, 간호행위 무관 발화 → record:false
+[약물명] 의료 문맥으로 올바르게 해석 (예: "에픽"→에피네프린, "덱사"→덱사메타손)
+
+응답 형식 (기록시): {"record":true,"category":"med","patient":"환자이름","summary":"내용15자이내","confidence":"high|medium|low"}
+응답 형식 (무시시): {"record":false}`,
+        }
+      }));
+      isListening = true;
+      setListenUI(true);
+    };
+
+  }catch(e){
+    console.error('Realtime 연결 오류:', e);
+    document.getElementById('ltxt').textContent='연결 실패: ' + e.message;
+    stopRealtime();
+  }
+}
+
+let _rtBuffer = ''; // GPT-4o 응답 스트리밍 버퍼
+
+function handleRealtimeEvent(e){
+  try{
+    const ev = JSON.parse(e.data);
+
+    // 실시간 음성 인식 중간 결과 (화면 표시용)
+    if(ev.type === 'conversation.item.input_audio_transcription.delta'){
+      const partial = ev.delta || '';
+      if(partial) document.getElementById('llast').textContent = '"' + partial + '"';
+    }
+
+    // GPT-4o 텍스트 응답 스트리밍
+    if(ev.type === 'response.text.delta'){
+      _rtBuffer += ev.delta || '';
+    }
+
+    // GPT-4o 응답 완료 → JSON 파싱하여 바로 기록
+    if(ev.type === 'response.text.done' || ev.type === 'response.done'){
+      const raw = _rtBuffer.trim();
+      _rtBuffer = '';
+      if(raw) parseAndLog(raw);
+    }
+
+    // 오류 처리
+    if(ev.type === 'error'){
+      console.error('Realtime 오류:', ev.error);
+      document.getElementById('ltxt').textContent = '오류: ' + (ev.error?.message || '알 수 없는 오류');
+    }
+
+  }catch(err){ console.error('이벤트 파싱 오류:', err); }
+}
+
+function parseAndLog(raw){
+  const ts = nowStr();
+  const patNames = myPatients.map(p=>p.name);
+  try{
+    const j = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    if(j.record === false) return; // 무시
+    const cat = j.category || 'etc';
+    const pat = patNames.includes(j.patient) ? j.patient : '미확인';
+    const summary = j.summary || raw;
+    const conf = j.confidence || 'low';
+    const id = 't' + Date.now();
+    logs.push({id, ts, patient:pat, text:summary, category:cat, confidence:conf, proc:false});
+    document.getElementById('llast').textContent = '"' + summary + '"';
+    renderLogs();
+  }catch(e){
+    // JSON 파싱 실패 — 그냥 etc로 기록
+    if(raw.length > 2 && raw.length < 200){
+      const id = 't' + Date.now();
+      logs.push({id, ts, patient:'미확인', text:raw, category:'etc', confidence:'low', proc:false});
+      renderLogs();
+    }
+  }
+}
+
+function stopRealtime(){
+  isListening = false;
+  if(rtDc){ try{rtDc.close();}catch(e){} rtDc=null; }
+  if(rtPc){ try{rtPc.close();}catch(e){} rtPc=null; }
+  if(audioStream){ audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; }
+  setListenUI(false);
 }
 
 function setListenUI(on){
@@ -528,146 +719,8 @@ function setListenUI(on){
   document.getElementById('micLbl').textContent=on?'청취 중단':'청취 시작';
 }
 
-const MED_DICT = {
-  // Epinephrine
-  '에피': '에피네프린',
-  '에픽': '에피네프린',
-  '에플': '에피네프린',
-  '애플': '에피네프린',
-  '에피네': '에피네프린',
-  // Cefazolin
-  '세파': '세파졸린',
-  '세파졸': '세파졸린',
-  // Dexamethasone
-  '덱사': '덱사메타손',
-  '덱사메': '덱사메타손',
-  // Lorazepam
-  '로라': '로라제팜',
-  // Metoclopramide
-  '메토': '메토클로프라미드',
-  // Midazolam
-  '미다': '미다졸람',
-  '미다졸': '미다졸람',
-  // Pethidine
-  '페치': '페치딘',
-  // Chlorpheniramine
-  '아빌': '페니라민(클로르페니라민)',
-  '페니라': '페니라민(클로르페니라민)',
-  // Fentanyl
-  '펜타': '펜타닐',
-  // Ketorolac
-  '케토': '케토롤락',
-  // Nitroglycerin
-  '니트로': '니트로글리세린',
-  // Morphine
-  '몰핀': '모르핀',
-  // 용량 단위 오인식 교정
-  '핀 애플': '1앰플',
-  '파인애플': '1앰플',
-  '원 앰플': '1앰플',
-  '투 앰플': '2앰플',
-  '밀리그람': 'mg',
-  '밀리그램': 'mg',
-  '마이크로그람': 'mcg',
-  '마이크로그램': 'mcg',
-  // 용량 단위 추가 교정
-  // 그람 (g)
-  '그냥': 'g',
-  '그만': 'g',
-  '그랑': 'g',
-  '그 람': 'g',
-  // 밀리그람 (mg)
-  '밀리그냥': 'mg',
-  '밀리그만': 'mg',
-  '밀리그랑': 'mg',
-  '밀리 그람': 'mg',
-  '밀리 그램': 'mg',
-  '밀리그': 'mg',
-  // 마이크로그램 (mcg)
-  '마이크로 그램': 'mcg',
-  '마이크로 그람': 'mcg',
-  '마이크 로그램': 'mcg',
-  '마이크로그만': 'mcg',
-  '마이크로그냥': 'mcg',
-  // 바이알 (vial)
-  '바이 알': '바이알',
-  '바이얼': '바이알',
-  '바이 얼': '바이알',
-  '바이앨': '바이알',
-  // 앰플 (ampule)
-  '앰풀': '앰플',
-  '앰 플': '앰플',
-  '앰 풀': '앰플',
-  '엠플': '앰플',
-  '엠 플': '앰플',
-  // 알 (tablet) - 숫자+알 패턴
-  '일알': '1알',
-  '이알': '2알',
-  '삼알': '3알',
-  '한 알': '1알',
-  '두 알': '2알',
-  '세 알': '3알',
-  // 테스트에서 발견된 오인식 교정
-  '의사선생님도 취했습니다': '의사선생님 노티 했습니다',
-  '의사선생님도취했습니다': '의사선생님 노티 했습니다',
-  '도 취했습니다': ' 노티 했습니다',
-  '도취했습니다': ' 노티 했습니다',
-  '인터': '인턴',
-  '안부속': '암브록솔',
-  '안부 록솔': '암브록솔',
-  '안부록솔': '암브록솔',
-  '두바이 할': '두바이알',
-  '두바이할': '두바이알',
-  '헤파리 5000년': '헤파린 5000유닛',
-  '헤파리': '헤파린',
-  '5000년': '5000유닛',
-  '오천년': '5000유닛',
-};
 
-function correctMedTerms(text) {
-  let corrected = text;
-  // 긴 키워드 먼저 처리 (부분 매칭 방지)
-  const keys = Object.keys(MED_DICT).sort((a,b) => b.length - a.length);
-  keys.forEach(k => {
-    const regex = new RegExp(k, 'g');
-    corrected = corrected.replace(regex, MED_DICT[k]);
-  });
-  return corrected;
-}
 
-async function processUtterance(text){
-  if(!text||text.length<2) return;
-  text = correctMedTerms(text);
-  const ts=nowStr();
-  const patNames=myPatients.map(p=>p.name);
-
-  // 발화가 환자 이름으로 시작하는지 확인 (최우선 규칙)
-  const startsWithPat=patNames.find(name=>{
-    const n=name.replace(/○/g,'').replace(/\s/g,'');
-    const t=text.replace(/\s/g,'');
-    return t.startsWith(n)||text.startsWith(name);
-  })||null;
-
-  const tempId='t'+Date.now();
-  logs.push({id:tempId,ts,patient:startsWithPat||'?',text,summary:text,category:'etc',confidence:'low',proc:true});
-  renderLogs();
-
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',max_tokens:200,
-        system:`응급실 간호 음성 기록 분류 AI. JSON만 출력.
-카테고리: vs(활력징후), med(투약), lab(검사), order(의사오더), etc(기타)
-담당 환자: [${patNames.join(', ')||'없음'}]
-
-[최우선] 발화가 환자 이름(님/씨 포함)으로 시작 → record:true, 해당 환자로 무조건 기록
-[기록] 간호사가 수행한 처치/투약/검사/측정 → record:true
-[의사오더] 지시하는 말투("~해줘","~투여해","~찍어봐") → category:order, record:true
-[무시] 환자/보호자 일상대화, 잡담, 간호행위 무관 발화 → record:false
-[약물명 교정] 음성인식 오류로 약물명이 이상해도 의료 문맥으로 올바르게 해석해서 summary 작성
-
-형식: {"record":true,"category":"vs","patient":"이름","summary":"15자이내","confidence":"high|medium|low"}
 무시시: {"record":false}`,
         messages:[{role:'user',content:`발화: "${text}"
 담당환자: ${patNames.join(', ')||'없음'}${startsWithPat?'\n[환자이름으로시작-무조건기록:'+ startsWithPat+']':''}`}]
@@ -727,7 +780,7 @@ function renderLogs(){
 }
 
 async function endDuty(){
-  if(isListening){isListening=false;try{recognition&&recognition.stop();}catch(e){}setListenUI(false);}
+  if(isListening){ stopRealtime(); }
   const done=logs.filter(l=>!l.proc);
   if(!done.length){alert('기록된 내용이 없습니다.');return;}
   show('reportScreen');
@@ -811,6 +864,11 @@ function copyRep(){
 }
 
 function goBack(){show('mainScreen');}
+function resetKey(){
+  localStorage.removeItem('oai_key');
+  window._OAI_KEY=null;
+  alert('API 키가 초기화되었습니다. 다시 청취 시작을 누르세요.');
+}
 
 // PWA
 if('serviceWorker' in navigator){
