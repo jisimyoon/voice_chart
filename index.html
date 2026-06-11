@@ -216,10 +216,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fl">간호사 이름</div>
     <input class="fi" type="text" id="sName" placeholder="예: 김간호" autocomplete="name" />
 
-    <div class="fl">OpenAI API 키</div>
-    <input class="fi" type="password" id="sApiKey" placeholder="sk-..." autocomplete="off" />
-    <div style="font-size:11px;color:var(--tx3);margin-top:4px;">한 번 입력하면 이 기기에 저장됩니다.</div>
-
     <div class="fl">근무 구분</div>
     <div class="g3">
       <div class="sb" data-shift="day" onclick="selS(this)">
@@ -392,16 +388,7 @@ function startDuty(){
   if(!name){alert('이름을 입력해 주세요.');return;}
   if(!shift){alert('근무 구분을 선택해 주세요.');return;}
   if(!myZone){alert('담당 Zone을 선택해 주세요.');return;}
-  // API 키 저장
-  const inputKey = document.getElementById('sApiKey').value.trim();
-  if(inputKey && inputKey.startsWith('sk-')){
-    localStorage.setItem('oai_key', inputKey);
-    window._OAI_KEY = inputKey;
-  } else {
-    const stored = localStorage.getItem('oai_key');
-    if(stored) { window._OAI_KEY = stored; }
-    else { alert('OpenAI API 키를 입력해 주세요. (sk-로 시작)'); return; }
-  }
+  // API 키는 Vercel 서버에서 관리 (클라이언트에 불필요)
   nurseName=name; nurseDate=document.getElementById('sDate').value;
   myPatients=zonePats[myZone].map(p=>({...p,isNew:false}));
   const sm=shiftMeta[shift];
@@ -514,7 +501,7 @@ function addToMine(name,zone){
 }
 
 function updateRealtimePatients(){
-  if(!rtDc || rtDc.readyState !== WebSocket.OPEN) return;
+  if(!rtDc || rtDc.readyState !== 'open') return;
   const patNames = myPatients.map(p=>p.name);
   rtDc.send(JSON.stringify({
     type: 'session.update',
@@ -567,35 +554,13 @@ async function startRealtime(){
   try{
     document.getElementById('ltxt').textContent='연결 중...';
 
-    // 마이크 스트림 확보
-    audioStream = await navigator.mediaDevices.getUserMedia({audio:true});
-
-    // MediaRecorder로 오디오 캡처
-    const mediaRecorder = new MediaRecorder(audioStream, {mimeType:'audio/webm'});
-    window._mediaRecorder = mediaRecorder;
-
-    // WebSocket 연결 (GA 버전)
-    const ws = new WebSocket(
-      'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview&authorization=Bearer%20' + encodeURIComponent(window._OAI_KEY)
-    );
-    rtDc = ws; // 기존 변수 재활용
-
-    ws.onopen = () => {
-      const patNames = myPatients.map(p=>p.name);
-      // 세션 설정
-      ws.send(JSON.stringify({
-        type: 'session.update',
-        session: {
-          modalities: ['text'],
-          input_audio_format: 'pcm16',
-          input_audio_transcription: { model: 'whisper-1' },
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 700,
-          },
-          instructions: `당신은 응급실 간호사의 AI 비서입니다.
+    // 1. Vercel 서버에서 ephemeral token 발급
+    const patNames = myPatients.map(p=>p.name);
+    const tokenRes = await fetch('https://er-nurse-server.vercel.app/api/session', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        instructions: `당신은 응급실 간호사의 AI 비서입니다.
 들리는 음성을 인식하고, 아래 규칙에 따라 JSON으로만 응답하세요. 다른 텍스트 없이.
 
 담당 환자 목록: [${patNames.join(', ')||'없음'}]
@@ -608,57 +573,51 @@ async function startRealtime(){
 [약물명] 의료 문맥으로 올바르게 해석 (예: "에픽"→에피네프린, "덱사"→덱사메타손)
 
 응답 형식 (기록시): {"record":true,"category":"med","patient":"환자이름","summary":"내용15자이내","confidence":"high|medium|low"}
-응답 형식 (무시시): {"record":false}`,
-        }
-      }));
+응답 형식 (무시시): {"record":false}`
+      })
+    });
 
-      // AudioContext로 PCM16 오디오 스트리밍
-      const audioCtx = new AudioContext({sampleRate: 24000});
-      window._audioCtx = audioCtx;
-      const source = audioCtx.createMediaStreamSource(audioStream);
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    if(!tokenRes.ok){
+      const err = await tokenRes.text();
+      throw new Error('토큰 발급 실패: ' + err);
+    }
 
-      processor.onaudioprocess = (e) => {
-        if(!isListening || ws.readyState !== WebSocket.OPEN) return;
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Float32 → PCM16 변환
-        const pcm16 = new Int16Array(inputData.length);
-        for(let i=0; i<inputData.length; i++){
-          pcm16[i] = Math.max(-32768, Math.min(32767, Math.floor(inputData[i] * 32768)));
-        }
-        // Base64 인코딩
-        const uint8 = new Uint8Array(pcm16.buffer);
-        let binary = '';
-        uint8.forEach(b => binary += String.fromCharCode(b));
-        const base64 = btoa(binary);
-        ws.send(JSON.stringify({
-          type: 'input_audio_buffer.append',
-          audio: base64
-        }));
-      };
+    const tokenData = await tokenRes.json();
+    const ephemeralKey = tokenData.client_secret?.value;
+    if(!ephemeralKey) throw new Error('토큰이 없습니다: ' + JSON.stringify(tokenData));
 
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
-      window._processor = processor;
-      window._source = source;
+    // 2. 마이크 스트림 확보
+    audioStream = await navigator.mediaDevices.getUserMedia({audio:true});
 
+    // 3. WebRTC 연결 (ephemeral token 사용)
+    rtPc = new RTCPeerConnection();
+    audioStream.getTracks().forEach(t => rtPc.addTrack(t, audioStream));
+    rtDc = rtPc.createDataChannel('oai-events');
+    rtDc.onmessage = handleRealtimeEvent;
+
+    const offer = await rtPc.createOffer();
+    await rtPc.setLocalDescription(offer);
+
+    const sdpRes = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + ephemeralKey,
+        'Content-Type': 'application/sdp',
+      },
+      body: offer.sdp,
+    });
+
+    if(!sdpRes.ok){
+      const err = await sdpRes.text();
+      throw new Error('WebRTC 연결 실패: ' + err);
+    }
+
+    const answerSdp = await sdpRes.text();
+    await rtPc.setRemoteDescription({type:'answer', sdp:answerSdp});
+
+    rtDc.onopen = () => {
       isListening = true;
       setListenUI(true);
-    };
-
-    ws.onmessage = (e) => handleRealtimeEvent({data: e.data});
-
-    ws.onerror = (e) => {
-      console.error('WebSocket 오류:', e);
-      document.getElementById('ltxt').textContent = 'WebSocket 연결 오류';
-      stopRealtime();
-    };
-
-    ws.onclose = (e) => {
-      if(isListening){
-        document.getElementById('ltxt').textContent = '연결 끊김 — 재연결 중...';
-        setTimeout(startRealtime, 2000);
-      }
     };
 
   }catch(e){
@@ -727,10 +686,8 @@ function parseAndLog(raw){
 
 function stopRealtime(){
   isListening = false;
-  if(window._processor){ try{window._processor.disconnect();}catch(e){} }
-  if(window._source){ try{window._source.disconnect();}catch(e){} }
-  if(window._audioCtx){ try{window._audioCtx.close();}catch(e){} window._audioCtx=null; }
   if(rtDc){ try{rtDc.close();}catch(e){} rtDc=null; }
+  if(rtPc){ try{rtPc.close();}catch(e){} rtPc=null; }
   if(audioStream){ audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; }
   setListenUI(false);
 }
