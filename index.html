@@ -536,11 +536,7 @@ let rtSession=null, rtPc=null, rtDc=null;
 let audioStream=null;
 
 async function initSpeech(){
-  // API 키는 startDuty에서 이미 처리됨
-  if(!window._OAI_KEY){
-    document.getElementById('ltxt').textContent='API 키 오류 — 다시 시작해 주세요';
-    document.getElementById('micToggle').disabled=true;
-  }
+  // API 키는 Vercel 서버에서 관리 — 클라이언트에서 불필요
 }
 
 async function toggleListen(){
