@@ -376,8 +376,6 @@ const zoneNew={'중앙':false,'1구역':false,'2구역':false,'3구역':false};
 (()=>{
   const t=new Date();
   document.getElementById('sDate').value=t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate());
-  const saved=localStorage.getItem('oai_key');
-  if(saved) document.getElementById('sApiKey').placeholder='저장된 키 사용 중 (변경하려면 입력)';
 })();
 
 function selS(el){document.querySelectorAll('[data-shift]').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');shift=el.dataset.shift;}
