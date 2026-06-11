@@ -216,6 +216,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fl">간호사 이름</div>
     <input class="fi" type="text" id="sName" placeholder="예: 김간호" autocomplete="name" />
 
+    <div class="fl">OpenAI API 키</div>
+    <input class="fi" type="password" id="sApiKey" placeholder="sk-..." autocomplete="off" />
+    <div style="font-size:11px;color:var(--tx3);margin-top:4px;">한 번 입력하면 이 기기에 저장됩니다.</div>
+
     <div class="fl">근무 구분</div>
     <div class="g3">
       <div class="sb" data-shift="day" onclick="selS(this)">
@@ -254,10 +258,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <div class="fl">날짜</div>
     <input class="fi" type="date" id="sDate" />
-
-    <div class="fl">OpenAI API 키</div>
-    <input class="fi" type="password" id="sApiKey" placeholder="sk-..." autocomplete="off" />
-    <div style="font-size:11px;color:var(--tx3);margin-top:4px;">입력하면 이 기기에 저장됩니다. 한 번만 입력하면 돼요.</div>
 
     <button class="go-btn" onclick="startDuty()">듀티 시작</button>
   </div>
