@@ -574,10 +574,9 @@ async function startRealtime(){
     const mediaRecorder = new MediaRecorder(audioStream, {mimeType:'audio/webm'});
     window._mediaRecorder = mediaRecorder;
 
-    // WebSocket 연결
+    // WebSocket 연결 (GA 버전)
     const ws = new WebSocket(
-      'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
-      ['realtime', 'openai-insecure-api-key.' + window._OAI_KEY, 'openai-beta.realtime-v1']
+      'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview&authorization=Bearer%20' + encodeURIComponent(window._OAI_KEY)
     );
     rtDc = ws; // 기존 변수 재활용
 
