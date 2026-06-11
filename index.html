@@ -528,8 +528,64 @@ function setListenUI(on){
   document.getElementById('micLbl').textContent=on?'청취 중단':'청취 시작';
 }
 
+const MED_DICT = {
+  // Epinephrine
+  '에피': '에피네프린',
+  '에픽': '에피네프린',
+  '에플': '에피네프린',
+  '애플': '에피네프린',
+  '에피네': '에피네프린',
+  // Cefazolin
+  '세파': '세파졸린',
+  '세파졸': '세파졸린',
+  // Dexamethasone
+  '덱사': '덱사메타손',
+  '덱사메': '덱사메타손',
+  // Lorazepam
+  '로라': '로라제팜',
+  // Metoclopramide
+  '메토': '메토클로프라미드',
+  // Midazolam
+  '미다': '미다졸람',
+  '미다졸': '미다졸람',
+  // Pethidine
+  '페치': '페치딘',
+  // Chlorpheniramine
+  '아빌': '페니라민(클로르페니라민)',
+  '페니라': '페니라민(클로르페니라민)',
+  // Fentanyl
+  '펜타': '펜타닐',
+  // Ketorolac
+  '케토': '케토롤락',
+  // Nitroglycerin
+  '니트로': '니트로글리세린',
+  // Morphine
+  '몰핀': '모르핀',
+  // 용량 단위 오인식 교정
+  '핀 애플': '1앰플',
+  '파인애플': '1앰플',
+  '원 앰플': '1앰플',
+  '투 앰플': '2앰플',
+  '밀리그람': 'mg',
+  '밀리그램': 'mg',
+  '마이크로그람': 'mcg',
+  '마이크로그램': 'mcg',
+};
+
+function correctMedTerms(text) {
+  let corrected = text;
+  // 긴 키워드 먼저 처리 (부분 매칭 방지)
+  const keys = Object.keys(MED_DICT).sort((a,b) => b.length - a.length);
+  keys.forEach(k => {
+    const regex = new RegExp(k, 'g');
+    corrected = corrected.replace(regex, MED_DICT[k]);
+  });
+  return corrected;
+}
+
 async function processUtterance(text){
   if(!text||text.length<2) return;
+  text = correctMedTerms(text);
   const ts=nowStr();
   const patNames=myPatients.map(p=>p.name);
 
@@ -557,6 +613,7 @@ async function processUtterance(text){
 [기록] 간호사가 수행한 처치/투약/검사/측정 → record:true
 [의사오더] 지시하는 말투("~해줘","~투여해","~찍어봐") → category:order, record:true
 [무시] 환자/보호자 일상대화, 잡담, 간호행위 무관 발화 → record:false
+[약물명 교정] 음성인식 오류로 약물명이 이상해도 의료 문맥으로 올바르게 해석해서 summary 작성
 
 형식: {"record":true,"category":"vs","patient":"이름","summary":"15자이내","confidence":"high|medium|low"}
 무시시: {"record":false}`,
