@@ -514,7 +514,7 @@ function addToMine(name,zone){
 }
 
 function updateRealtimePatients(){
-  if(!rtDc || rtDc.readyState !== 'open') return;
+  if(!rtDc || rtDc.readyState !== WebSocket.OPEN) return;
   const patNames = myPatients.map(p=>p.name);
   rtDc.send(JSON.stringify({
     type: 'session.update',
@@ -570,45 +570,25 @@ async function startRealtime(){
     // 마이크 스트림 확보
     audioStream = await navigator.mediaDevices.getUserMedia({audio:true});
 
-    // OpenAI Realtime API — WebRTC 방식
-    rtPc = new RTCPeerConnection();
+    // MediaRecorder로 오디오 캡처
+    const mediaRecorder = new MediaRecorder(audioStream, {mimeType:'audio/webm'});
+    window._mediaRecorder = mediaRecorder;
 
-    // 오디오 트랙 추가
-    audioStream.getTracks().forEach(t => rtPc.addTrack(t, audioStream));
+    // WebSocket 연결
+    const ws = new WebSocket(
+      'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
+      ['realtime', 'openai-insecure-api-key.' + window._OAI_KEY, 'openai-beta.realtime-v1']
+    );
+    rtDc = ws; // 기존 변수 재활용
 
-    // 데이터 채널 (이벤트 수신)
-    rtDc = rtPc.createDataChannel('oai-events');
-    rtDc.onmessage = handleRealtimeEvent;
-
-    // SDP offer 생성
-    const offer = await rtPc.createOffer();
-    await rtPc.setLocalDescription(offer);
-
-    // OpenAI Realtime API 연결
-    const res = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + window._OAI_KEY,
-        'Content-Type': 'application/sdp',
-      },
-      body: offer.sdp,
-    });
-
-    if(!res.ok){
-      const err = await res.text();
-      throw new Error('API 오류: ' + res.status + ' ' + err);
-    }
-
-    const answerSdp = await res.text();
-    await rtPc.setRemoteDescription({type:'answer', sdp:answerSdp});
-
-    // 세션 설정 — GPT-4o가 음성인식 + 분류 동시 처리
-    rtDc.onopen = () => {
+    ws.onopen = () => {
       const patNames = myPatients.map(p=>p.name);
-      rtDc.send(JSON.stringify({
+      // 세션 설정
+      ws.send(JSON.stringify({
         type: 'session.update',
         session: {
           modalities: ['text'],
+          input_audio_format: 'pcm16',
           input_audio_transcription: { model: 'whisper-1' },
           turn_detection: {
             type: 'server_vad',
@@ -632,13 +612,59 @@ async function startRealtime(){
 응답 형식 (무시시): {"record":false}`,
         }
       }));
+
+      // AudioContext로 PCM16 오디오 스트리밍
+      const audioCtx = new AudioContext({sampleRate: 24000});
+      window._audioCtx = audioCtx;
+      const source = audioCtx.createMediaStreamSource(audioStream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        if(!isListening || ws.readyState !== WebSocket.OPEN) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        // Float32 → PCM16 변환
+        const pcm16 = new Int16Array(inputData.length);
+        for(let i=0; i<inputData.length; i++){
+          pcm16[i] = Math.max(-32768, Math.min(32767, Math.floor(inputData[i] * 32768)));
+        }
+        // Base64 인코딩
+        const uint8 = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        uint8.forEach(b => binary += String.fromCharCode(b));
+        const base64 = btoa(binary);
+        ws.send(JSON.stringify({
+          type: 'input_audio_buffer.append',
+          audio: base64
+        }));
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+      window._processor = processor;
+      window._source = source;
+
       isListening = true;
       setListenUI(true);
     };
 
+    ws.onmessage = (e) => handleRealtimeEvent({data: e.data});
+
+    ws.onerror = (e) => {
+      console.error('WebSocket 오류:', e);
+      document.getElementById('ltxt').textContent = 'WebSocket 연결 오류';
+      stopRealtime();
+    };
+
+    ws.onclose = (e) => {
+      if(isListening){
+        document.getElementById('ltxt').textContent = '연결 끊김 — 재연결 중...';
+        setTimeout(startRealtime, 2000);
+      }
+    };
+
   }catch(e){
     console.error('Realtime 연결 오류:', e);
-    document.getElementById('ltxt').textContent='연결 실패: ' + e.message;
+    document.getElementById('ltxt').textContent = '연결 실패: ' + e.message;
     stopRealtime();
   }
 }
@@ -702,8 +728,10 @@ function parseAndLog(raw){
 
 function stopRealtime(){
   isListening = false;
+  if(window._processor){ try{window._processor.disconnect();}catch(e){} }
+  if(window._source){ try{window._source.disconnect();}catch(e){} }
+  if(window._audioCtx){ try{window._audioCtx.close();}catch(e){} window._audioCtx=null; }
   if(rtDc){ try{rtDc.close();}catch(e){} rtDc=null; }
-  if(rtPc){ try{rtPc.close();}catch(e){} rtPc=null; }
   if(audioStream){ audioStream.getTracks().forEach(t=>t.stop()); audioStream=null; }
   setListenUI(false);
 }
