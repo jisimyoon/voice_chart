@@ -669,19 +669,31 @@ function handleRealtimeEvent(e){
       if(transcript) document.getElementById('llast').textContent = '"' + transcript + '"';
     }
 
-    // GPT-4o 텍스트 응답 스트리밍
+    // GPT-4o 텍스트 응답 스트리밍 (text modality)
     if(ev.type === 'response.text.delta'){
       _rtBuffer += ev.delta || '';
     }
 
-    // GPT-4o 응답 완료 → JSON 파싱하여 바로 기록
+    // GPT-4o 오디오 트랜스크립트 (audio modality)
+    if(ev.type === 'response.output_audio_transcript.delta'){
+      _rtBuffer += ev.delta || '';
+    }
+
+    // 텍스트 응답 완료
     if(ev.type === 'response.text.done'){
       const raw = _rtBuffer.trim();
       _rtBuffer = '';
       if(raw) parseAndLog(raw);
     }
 
-    // response.done — 응답 전체 완료
+    // 오디오 트랜스크립트 완료
+    if(ev.type === 'response.output_audio_transcript.done'){
+      const raw = _rtBuffer.trim();
+      _rtBuffer = '';
+      if(raw) parseAndLog(raw);
+    }
+
+    // response.done — 응답 전체 완료 (fallback)
     if(ev.type === 'response.done'){
       const raw = _rtBuffer.trim();
       _rtBuffer = '';
@@ -691,7 +703,9 @@ function handleRealtimeEvent(e){
       outputs.forEach(out => {
         if(out.type === 'message'){
           out.content?.forEach(c => {
-            if(c.type === 'text' && c.text) parseAndLog(c.text);
+            if((c.type === 'text' || c.type === 'audio') && (c.text || c.transcript)){
+              parseAndLog(c.text || c.transcript);
+            }
           });
         }
       });
