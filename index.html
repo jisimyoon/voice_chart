@@ -666,18 +666,26 @@ function handleRealtimeEvent(e){
       if(raw) parseAndLog(raw);
     }
 
-    // response.done — output에서 전체 텍스트 추출
+    // response.done — output에서 전체 텍스트 추출 (가장 완전한 데이터)
     if(ev.type === 'response.done'){
+      const buf = _rtBuffer.trim();
       _rtBuffer = '';
+      // output에서 전체 텍스트 먼저 시도
+      let handled = false;
       const outputs = ev.response?.output || [];
       outputs.forEach(out => {
         if(out.type === 'message'){
           out.content?.forEach(c => {
-            const txt = c.text || c.transcript || '';
-            if(txt.trim()) parseAndLog(txt.trim());
+            const txt = (c.text || c.transcript || '').trim();
+            if(txt && txt.length > 5){
+              parseAndLog(txt);
+              handled = true;
+            }
           });
         }
       });
+      // output에 없으면 버퍼 사용
+      if(!handled && buf && buf.length > 5) parseAndLog(buf);
     }
 
     // 오류 처리
