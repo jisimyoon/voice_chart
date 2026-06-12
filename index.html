@@ -610,6 +610,35 @@ async function startRealtime(){
     await rtPc.setRemoteDescription({type:'answer', sdp:answerSdp});
 
     rtDc.onopen = () => {
+      const patNames = myPatients.map(p=>p.name);
+      // 세션 설정 — 텍스트 응답만 받도록
+      rtDc.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          modalities: ['text'],
+          instructions: `당신은 응급실 간호사의 AI 비서입니다.
+들리는 음성을 인식하고, 아래 규칙에 따라 JSON으로만 응답하세요. 다른 텍스트 없이.
+
+담당 환자 목록: [${patNames.join(', ')||'없음'}]
+카테고리: vs(활력징후), med(투약), lab(검사), order(의사오더), etc(기타)
+
+[최우선] 발화가 환자 이름(님/씨 포함)으로 시작 → record:true, 해당 환자로 무조건 기록
+[기록] 간호사 처치/투약/검사/측정 발화 → record:true
+[의사오더] 지시 말투("~해줘","~투여해","~찍어봐") → category:order, record:true
+[무시] 환자/보호자 일상대화, 잡담, 간호행위 무관 발화 → record:false
+[약물명] 의료 문맥으로 올바르게 해석 (예: "에픽"→에피네프린, "덱사"→덱사메타손)
+
+응답 형식 (기록시): {"record":true,"category":"med","patient":"환자이름","summary":"내용15자이내","confidence":"high|medium|low"}
+응답 형식 (무시시): {"record":false}`,
+          input_audio_transcription: { model: 'gpt-4o-transcribe' },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 700,
+          },
+        }
+      }));
       isListening = true;
       setListenUI(true);
     };
@@ -626,11 +655,18 @@ let _rtBuffer = ''; // GPT-4o 응답 스트리밍 버퍼
 function handleRealtimeEvent(e){
   try{
     const ev = JSON.parse(e.data);
+    console.log('[RT Event]', ev.type, ev); // 디버깅
 
-    // 실시간 음성 인식 중간 결과 (화면 표시용)
+    // 음성 인식 중간 결과
     if(ev.type === 'conversation.item.input_audio_transcription.delta'){
       const partial = ev.delta || '';
       if(partial) document.getElementById('llast').textContent = '"' + partial + '"';
+    }
+
+    // 음성 인식 완료 — 전사 텍스트 표시
+    if(ev.type === 'conversation.item.input_audio_transcription.completed'){
+      const transcript = ev.transcript || '';
+      if(transcript) document.getElementById('llast').textContent = '"' + transcript + '"';
     }
 
     // GPT-4o 텍스트 응답 스트리밍
@@ -639,10 +675,26 @@ function handleRealtimeEvent(e){
     }
 
     // GPT-4o 응답 완료 → JSON 파싱하여 바로 기록
-    if(ev.type === 'response.text.done' || ev.type === 'response.done'){
+    if(ev.type === 'response.text.done'){
       const raw = _rtBuffer.trim();
       _rtBuffer = '';
       if(raw) parseAndLog(raw);
+    }
+
+    // response.done — 응답 전체 완료
+    if(ev.type === 'response.done'){
+      const raw = _rtBuffer.trim();
+      _rtBuffer = '';
+      if(raw) parseAndLog(raw);
+      // output 안에 텍스트가 있는 경우도 처리
+      const outputs = ev.response?.output || [];
+      outputs.forEach(out => {
+        if(out.type === 'message'){
+          out.content?.forEach(c => {
+            if(c.type === 'text' && c.text) parseAndLog(c.text);
+          });
+        }
+      });
     }
 
     // 오류 처리
