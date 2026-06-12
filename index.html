@@ -577,7 +577,7 @@ async function startRealtime(){
     }
 
     const tokenData = await tokenRes.json();
-    const ephemeralKey = tokenData.client_secret?.value || tokenData.value;
+    const ephemeralKey = tokenData.value || tokenData.client_secret?.value;
     if(!ephemeralKey) throw new Error('토큰이 없습니다: ' + JSON.stringify(tokenData));
 
     // 2. 마이크 스트림 확보
@@ -592,7 +592,7 @@ async function startRealtime(){
     const offer = await rtPc.createOffer();
     await rtPc.setLocalDescription(offer);
 
-    const sdpRes = await fetch('https://api.openai.com/v1/realtime', {
+    const sdpRes = await fetch('https://api.openai.com/v1/realtime/calls', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + ephemeralKey,
