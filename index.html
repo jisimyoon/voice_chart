@@ -615,7 +615,6 @@ async function startRealtime(){
       rtDc.send(JSON.stringify({
         type: 'session.update',
         session: {
-          modalities: ['audio', 'text'],
           instructions: `당신은 응급실 간호사의 AI 비서입니다.
 들리는 음성을 인식하고, 아래 규칙에 따라 JSON으로만 응답하세요. 다른 텍스트 없이.
 
