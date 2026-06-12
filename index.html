@@ -647,38 +647,34 @@ function handleRealtimeEvent(e){
       _rtBuffer += ev.delta || '';
     }
 
-    // GPT-4o 오디오 트랜스크립트 (audio modality)
+    // GPT-4o 오디오 트랜스크립트 delta (버퍼에 누적)
     if(ev.type === 'response.output_audio_transcript.delta'){
       _rtBuffer += ev.delta || '';
     }
 
-    // 텍스트 응답 완료
+    // 텍스트 응답 완료 — done 이벤트의 transcript 사용
     if(ev.type === 'response.text.done'){
-      const raw = _rtBuffer.trim();
+      const raw = (ev.text || _rtBuffer).trim();
       _rtBuffer = '';
       if(raw) parseAndLog(raw);
     }
 
-    // 오디오 트랜스크립트 완료
+    // 오디오 트랜스크립트 완료 — done 이벤트의 transcript 사용
     if(ev.type === 'response.output_audio_transcript.done'){
-      const raw = _rtBuffer.trim();
+      const raw = (ev.transcript || _rtBuffer).trim();
       _rtBuffer = '';
       if(raw) parseAndLog(raw);
     }
 
-    // response.done — 응답 전체 완료 (fallback)
+    // response.done — output에서 전체 텍스트 추출
     if(ev.type === 'response.done'){
-      const raw = _rtBuffer.trim();
       _rtBuffer = '';
-      if(raw) parseAndLog(raw);
-      // output 안에 텍스트가 있는 경우도 처리
       const outputs = ev.response?.output || [];
       outputs.forEach(out => {
         if(out.type === 'message'){
           out.content?.forEach(c => {
-            if((c.type === 'text' || c.type === 'audio') && (c.text || c.transcript)){
-              parseAndLog(c.text || c.transcript);
-            }
+            const txt = c.text || c.transcript || '';
+            if(txt.trim()) parseAndLog(txt.trim());
           });
         }
       });
